@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 import utils
 
-path = 'img/1.jpg'
+path = 'dataset/img/1.jpg'
 widthImg = 700
 heightImg = 700
 questions = 5
@@ -116,12 +116,12 @@ while True:
     imgBlank = np.zeros_like(img)
     # making image array
     imageArray = ([img, imgGray, imgBlur, imgCanny],
-                  [imgContours, imgBiggestContours, imgWarpColored, imgThresh],
-                  [imgBlank, imgBlank, imgBlank, imgBlank])
+                  [imgContours, imgBiggestContours, imgWarpColored, imgThresh])
+                  
 
     labels = [["Original", "Gray", "Blur", "Canny"],
-              ["Contours", "Biggest con", "Warpped", "Threshold"],
-              ["blank", "blank", "blank", "blank"]]
+              ["Contours", "Biggest con", "Warpped", "Threshold"]]
+              
 
     # imported function from utils to show the images used as a stack
     imgStacked = utils.stackImages(imageArray, 0.3, labels)
