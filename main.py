@@ -114,7 +114,7 @@ while True:
         imgResult = utils.showAnswers(imgResult, myIndex, grading, answers, questions, choices)
 
     imgBlank = np.zeros_like(img)
-    # making image array
+    # making image array with data
     imageArray = ([img, imgGray, imgBlur, imgCanny],
                   [imgContours, imgBiggestContours, imgWarpColored, imgThresh])
                   
