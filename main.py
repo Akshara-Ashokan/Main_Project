@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 import utils
 
-path = 'dataset/img/1.jpg'
+path = 'img/1.jpg'
 widthImg = 700
 heightImg = 700
 questions = 5
@@ -13,8 +13,6 @@ answers = ['b', 'd', 'a', 'a', 'e']
 # converting answers to indexes
 answers = utils.convertAnswers(answers)
 
-cap = cv2.VideoCapture(0)
-cap.set(10, 150)
 
 while True:
 
@@ -42,7 +40,7 @@ while True:
     # we are getting every points of the pixels. we want the corner points only
     biggestContour = utils.getCornerPoints(rectangleContours[0])
     gradePoints = utils.getCornerPoints(rectangleContours[1])  # second biggest
-    # print(biggestContour)
+    #print(biggestContour)
 
     if biggestContour.size != 0 and gradePoints.size != 0:
         cv2.drawContours(imgBiggestContours, biggestContour, -1, (0, 255, 0), 20)
@@ -50,7 +48,7 @@ while True:
 
         biggestContour = utils.reorder(biggestContour)
         gradePoints = utils.reorder(gradePoints)
-        # print(gradePoints)
+        #print(gradePoints)
 
         point1 = np.float32(biggestContour)
         point2 = np.float32([[0, 0], [widthImg, 0], [0, heightImg], [widthImg, heightImg]])
@@ -61,7 +59,7 @@ while True:
         gradePoint2 = np.float32([[0, 0], [325, 0], [0, 150], [325, 150]])
         gradeMatrix = cv2.getPerspectiveTransform(gradePoint1, gradePoint2)
         imgGradeWarpColored = cv2.warpPerspective(img, gradeMatrix, (325, 150))
-        # cv2.imshow('Grade Image', imgGradeWarpColored)
+         #cv2.imshow('Grade Image', imgGradeWarpColored)
 
         # now we need to get the markings inside the bubbles of omr sheet,
         # the bubbles with more pixels will bet the answer marked and the less pixels will be unmarked
@@ -114,14 +112,14 @@ while True:
         imgResult = utils.showAnswers(imgResult, myIndex, grading, answers, questions, choices)
 
     imgBlank = np.zeros_like(img)
-    # making image array with data
+    # making image array
     imageArray = ([img, imgGray, imgBlur, imgCanny],
-                  [imgContours, imgBiggestContours, imgWarpColored, imgThresh])
-                  
+                  [imgContours, imgBiggestContours, imgWarpColored, imgThresh],
+                  [imgResult, imgBlank, imgBlank, imgBlank])
 
     labels = [["Original", "Gray", "Blur", "Canny"],
-              ["Contours", "Biggest con", "Warpped", "Threshold"]]
-              
+              ["Contours", "Biggest con", "Warpped", "Threshold"],
+              ["Raw Result", "blank", "blank", "blank"]]
 
     # imported function from utils to show the images used as a stack
     imgStacked = utils.stackImages(imageArray, 0.3, labels)
