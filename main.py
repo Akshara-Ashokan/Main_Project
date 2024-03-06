@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 import utils
 
-path = 'img/1.jpg'
+path = 'img/2.jpg'
 widthImg = 700
 heightImg = 700
 questions = 5
@@ -22,7 +22,7 @@ while True:
     imgContours = img.copy()
     imgBiggestContours = img.copy()
     imgGradeContours = img.copy()
-
+    imgFinal=img.copy()
     ## image preprocessing
     # coverting to grayscale
     imgGray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -110,20 +110,31 @@ while True:
         # displaying the answers in the image
         imgResult = imgWarpColored.copy()
         imgResult = utils.showAnswers(imgResult, myIndex, grading, answers, questions, choices)
+        imgRawDrawing=np.zeros_like(imgWarpColored)
+        imgRawDrawing = utils.showAnswers(imgRawDrawing, myIndex, grading, answers, questions, choices)
+        invMatrix = cv2.getPerspectiveTransform(point2, point1)
+        imgInvWarp = cv2.warpPerspective(imgRawDrawing, invMatrix, (widthImg, heightImg))
+
+        imgRawGrade=np.zeros_like(imgGradeWarpColored)
+        cv2.putText(imgRawGrade,str(int(score))+"%",(50,100),cv2.FONT_HERSHEY_COMPLEX,3,(0,255,255),3)
+        cv2.imshow("Grade",imgRawGrade)
+
+
+        imgFinal=cv2.addWeighted(imgFinal,1,imgInvWarp,1,0)
 
     imgBlank = np.zeros_like(img)
     # making image array
     imageArray = ([img, imgGray, imgBlur, imgCanny],
                   [imgContours, imgBiggestContours, imgWarpColored, imgThresh],
-                  [imgResult, imgBlank, imgBlank, imgBlank])
+                  [imgResult, imgRawDrawing, imgInvWarp, imgFinal])
 
     labels = [["Original", "Gray", "Blur", "Canny"],
               ["Contours", "Biggest con", "Warpped", "Threshold"],
-              ["Raw Result", "blank", "blank", "blank"]]
+              ["Raw Result", "Raw Drawing", "Inv Warp", "Final"]]
 
     # imported function from utils to show the images used as a stack
     imgStacked = utils.stackImages(imageArray, 0.3, labels)
-
+    cv2.imshow("Final Result",imgFinal)
     cv2.imshow('Stacked images', imgStacked)
 
     key = cv2.waitKey(1) & 0xFF
