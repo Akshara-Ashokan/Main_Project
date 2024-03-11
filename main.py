@@ -10,7 +10,7 @@ choices = 5
 # answers = [0, 2, 0, 2, 3]
 answers = ['b', 'd', 'a', 'a', 'e']
 
-# converting answers to indexes
+# converting answer to indexes
 answers = utils.convertAnswers(answers)
 
 
@@ -95,7 +95,7 @@ while True:
 
         # print(myIndex)
 
-        # Grading
+        # Grade
         grading = []
         for i in range(0, questions):
             if answers[i] == myIndex[i]:
