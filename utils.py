@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 
+# used to show the images as a stack
 def stackImages(imgArray,scale,lables=[]):
     rows = len(imgArray)
     cols = len(imgArray[0])
@@ -30,29 +31,28 @@ def stackImages(imgArray,scale,lables=[]):
     if len(lables) != 0:
         eachImgWidth= int(ver.shape[1] / cols)
         eachImgHeight = int(ver.shape[0] / rows)
-        #print(eachImgHeight)
         for d in range(0, rows):
             for c in range (0,cols):
                 cv2.rectangle(ver,(c*eachImgWidth,eachImgHeight*d),(c*eachImgWidth+len(lables[d][c])*13+27,30+eachImgHeight*d),(255,255,255),cv2.FILLED)
                 cv2.putText(ver,lables[d][c],(eachImgWidth*c+10,eachImgHeight*d+20),cv2.FONT_HERSHEY_COMPLEX,0.7,(255,0,255),2)
     return ver
 
+# function to find out the rectangle edges
 def rectContour(contours):
     rectangleContour = []
     for i in contours:
         area = cv2.contourArea(i)
-        # print('Area: ', area)
         if area > 50:
             perimeter = cv2.arcLength(i, True)
             # approximation of corner points of each rectangle
             approx = cv2.approxPolyDP(i, 0.02*perimeter, True)
-            # print('corner points', len(approx))
             if len(approx) == 4:
                 rectangleContour.append(i)
 
     rectangleContour = sorted(rectangleContour, key=cv2.contourArea, reverse=True)
     return rectangleContour
 
+# finding the corner points of the rectangles
 def getCornerPoints(contour):
     perimeter = cv2.arcLength(contour, True)
     approx = cv2.approxPolyDP(contour, 0.02*perimeter, True)
@@ -60,36 +60,32 @@ def getCornerPoints(contour):
 
 # reordring the points because if we dont do it then the image will not get properly
 def reorder(myPoints):
-    # print(myPoints)
     myPoints = myPoints.reshape((4, 2))
     myPointsNew = np.zeros((4, 1, 2), np.int32)
     add = myPoints.sum(1)
     diff = np.diff(myPoints, axis=1)
-    # print(add)
-    # print(diff)
     # adding the points so that we can under stand the points order.
     # the minimum numbered point will be the top right and the maximum will be the bottom right
     myPointsNew[0] = myPoints[np.argmin(add)] # top left
     myPointsNew[3] = myPoints[np.argmax(add)] # bottom right
     myPointsNew[1] = myPoints[np.argmin(diff)] # bottom left
     myPointsNew[2] = myPoints[np.argmax(diff)] # top right
-    # print(myPointsNew)
 
     return myPointsNew
 
+# function for splitting the box into five equal parts
 def splitBoxes(img):
     rows = np.vsplit(img, 5)
 
     boxes = []
     for r in rows:
-        cols =  np.hsplit(r, 5)
+        cols = np.hsplit(r, 5)
         for box in cols:
             boxes.append(box)
     return boxes
 
+# function for marking the bubbles in the OMR sheet
 def showAnswers(img, myIndex, grading, answers, questions, choices):
-    # print(myIndex)
-    # print(answers)
     sectionWidth = int(img.shape[1]/questions)
     sectionHeight = int(img.shape[1]/choices)
 
@@ -101,6 +97,9 @@ def showAnswers(img, myIndex, grading, answers, questions, choices):
 
         if grading[i]:
             cv2.circle(img, (cX, cY), 50, (0, 255, 0), cv2.FILLED)
+        elif grading[i] == 0 and myAns == -1: # checking wheather the bubble is marked nothing or more than one
+            cY = (i * 140) + 75
+            img = cv2.line(img, (50, cY), (650, cY), (0, 0, 255), 70)
         else:
             cv2.circle(img, (cX, cY), 50, (0, 0, 255), cv2.FILLED)
 
@@ -109,6 +108,7 @@ def showAnswers(img, myIndex, grading, answers, questions, choices):
 
     return img
 
+# function for converting the answers a, b, c, d, e  into  0, 1, 2, 3, 4
 def convertAnswers(answers):
     result = []
 
