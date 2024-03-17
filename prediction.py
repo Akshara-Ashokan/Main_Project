@@ -4,6 +4,9 @@ import main
 
 # answer of the omr sheet in order
 answers = ['b', 'd', 'a', 'a', 'e']
+negative_marking = True
+questions = 5
+choices = 5
 
 # input and output folder paths
 input_folder_path = './OMR_Sheets'
@@ -23,9 +26,9 @@ if os.path.exists(input_folder_path):
             image_path = os.path.join(input_folder_path, filename)
 
             # calling the function in main to get the answers marked in the image
-            img, score = main.get_answers(image_path, answers)
+            img, score = main.get_answers(image_path, answers, negative_marking, questions, choices)
 
-            new_filename = f"{os.path.splitext(filename)[0]}_{score}%__{os.path.splitext(filename)[1]}"
+            new_filename = f"{os.path.splitext(filename)[0]}_{score}%{os.path.splitext(filename)[1]}"
 
             # Construct the full path to the output image
             output_image_path = os.path.join(output_folder_path, new_filename)
