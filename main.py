@@ -3,26 +3,15 @@ import numpy as np
 import utils  # utils is the python file for writing the helper functions.
 
 
-def get_answers(path, answers):
+def get_answers(path, answers, negative_marking, questions, choices):
     widthImg = 700
     heightImg = 700
-    questions = 5
-    choices = 5
-
-    webCamFeed = False  # if this makes true, you can work with the webcam
 
     # converting answers to indexes. calling the function from utils file
     answers = utils.convertAnswers(answers)
 
-    cap = cv2.VideoCapture(0)
-    cap.set(10, 150)
-
     while True:
-
-        if webCamFeed:
-            success, img = cap.read()
-        else:
-            img = cv2.imread(path)
+        img = cv2.imread(path)
 
         img = cv2.resize(img, (widthImg, heightImg))
         imgContours = img.copy()
@@ -80,7 +69,7 @@ def get_answers(path, answers):
 
                 # Then we split the image into 5 for each row to get each bubbles.
                 # caling the function from utils file
-                boxes = utils.splitBoxes(imgThresh)
+                boxes = utils.splitBoxes(imgThresh, questions, choices)
 
                 pixelVal = np.zeros((questions, choices))
                 columnCount = 0
@@ -118,7 +107,18 @@ def get_answers(path, answers):
                     else:
                         grading.append(0)
 
-                score = (sum(grading) / questions) * 100
+                temp_grading = grading.copy()
+
+                if negative_marking:
+                    for i in range(len(myIndex)):
+                        if myIndex[i] != -1 and temp_grading[i] == 0:
+                            temp_grading[i] -= 1 / 3
+
+                score = (sum(temp_grading) / questions) * 100
+                score = round(score, 1)
+                score = max(score, 0.0)
+                if score == 100.0:
+                    score = 100
 
                 # now we have to mark the right and wrong in the OMR sheet that we extracted from the image.
                 # for that also we use cv2 to draw green if the answer is correct, red if the answer marked is wrong.
@@ -145,7 +145,7 @@ def get_answers(path, answers):
                 # also we found out the grade before. and we add that grade into the small rectangle.
                 # adding the Grade in the box
                 imgRawGrade = np.zeros_like(imgGradeWarpColored)
-                cv2.putText(imgRawGrade, str(score) + '%', (20, 100), cv2.FONT_HERSHEY_COMPLEX, 3, (0, 175, 149), 3)
+                cv2.putText(imgRawGrade, str(score) + '%', (20, 100), cv2.FONT_HERSHEY_COMPLEX, 3, (0, 256, 256), 3)
 
                 gradeInvMatrix = cv2.getPerspectiveTransform(gradePoint2, gradePoint1)
                 imgInvGradeWarp = cv2.warpPerspective(imgRawGrade, gradeInvMatrix, (widthImg, heightImg))
@@ -182,11 +182,7 @@ def get_answers(path, answers):
         key = cv2.waitKey(1) & 0xFF
 
         # press s key to save the image
-        if key == ord('s'):
-            cv2.imwrite('Result.jpg', finalImg)
-            cv2.waitKey(300)
-        elif key != 0xFF:
+        if key != 0xFF:
             break
 
-    cap.release()
     cv2.destroyAllWindows()
