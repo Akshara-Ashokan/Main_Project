@@ -74,12 +74,12 @@ def reorder(myPoints):
     return myPointsNew
 
 # function for splitting the box into five equal parts
-def splitBoxes(img):
-    rows = np.vsplit(img, 5)
+def splitBoxes(img, questions, choices):
+    rows = np.vsplit(img, questions)
 
     boxes = []
     for r in rows:
-        cols = np.hsplit(r, 5)
+        cols = np.hsplit(r, choices)
         for box in cols:
             boxes.append(box)
     return boxes
@@ -98,8 +98,11 @@ def showAnswers(img, myIndex, grading, answers, questions, choices):
         if grading[i]:
             cv2.circle(img, (cX, cY), 50, (0, 255, 0), cv2.FILLED)
         elif grading[i] == 0 and myAns == -1: # checking wheather the bubble is marked nothing or more than one
-            cY = (i * 140) + 75
-            img = cv2.line(img, (50, cY), (650, cY), (0, 0, 255), 70)
+            lineX = (sectionWidth * questions)
+            img = cv2.line(img, (50, cY), (lineX - 50, cY), (0, 0, 255), 70)
+
+            cX = (answers[i] * sectionWidth) + sectionWidth // 2
+            cv2.circle(img, (cX, cY), 20, (0, 255, 0), cv2.FILLED)
         else:
             cv2.circle(img, (cX, cY), 50, (0, 0, 255), cv2.FILLED)
 
@@ -113,7 +116,7 @@ def convertAnswers(answers):
     result = []
 
     for letter in answers:
-        value = ord(letter) - ord('a')
+        value = ord(letter.lower()) - ord('a')
         result.append(value)
 
     return result
