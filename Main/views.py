@@ -1,17 +1,28 @@
-from django.shortcuts import render,redirect
+# views.py
+from django.shortcuts import render
 import os
 from django.conf import settings
-from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
 import cv2
 import numpy as np
 import zipfile
+import shutil
 from datetime import datetime
 from django.http import HttpResponse
 
-def Index(request):
-    question = [1, 2, 3, 4, 5]  
+def Home(request):
+    return render(request, "Home.html")
+
+
+def Submit(request):
     if request.method == "POST":
+        # Get form data
+        num_questions = int(request.POST.get("numQuestions"))
+        options_per_question = int(request.POST.get("optionsPerQuestion"))
+        negative_marking = True if request.POST.get("negativeMarking") == "on" else False
+
+        # Generate question numbers
+        questions = list(range(1, num_questions + 1))
+
         upload_folder = os.path.join(settings.MEDIA_ROOT, 'OMR_Sheets')
         if not os.path.exists(upload_folder):
             os.makedirs(upload_folder)
@@ -21,45 +32,58 @@ def Index(request):
             with open(os.path.join(upload_folder, image.name), 'wb') as f:
                 for chunk in image.chunks():
                     f.write(chunk)
+
         answers = []
-        for i in question:
+        for i in questions:
             answers.append(request.POST.get("answer" + str(i)))
 
-        predictionFun(answers)
-        
+        predictionFun(answers, upload_folder, num_questions, options_per_question, negative_marking)
+
         # Create folder and zip file with current date and time
         current_datetime = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
         folder_name = f'OMR_Answers_{current_datetime}'
         zip_file_name = f'OMR_Answers_{current_datetime}.zip'
-        folder_path = os.path.join(settings.MEDIA_ROOT, folder_name)
+        folder_path = os.path.join(settings.MEDIA_ROOT, 'OMR_Answers')  # Adjusted folder path
         zip_file_path = os.path.join(settings.MEDIA_ROOT, zip_file_name)
-        
+
         # Move the processed images to the named folder
-        os.rename(os.path.join(settings.MEDIA_ROOT, 'OMR_Answers'), folder_path)
-        
+        destination_path = os.path.join(folder_path, 'OMR_Sheets')
+        os.makedirs(destination_path, exist_ok=True)  # Create the destination folder if it doesn't exist
+        for filename in os.listdir(upload_folder):
+            source = os.path.join(upload_folder, filename)
+            destination = os.path.join(destination_path, filename)
+            shutil.move(source, destination)
+
         # Compress the named folder into a zip file
         with zipfile.ZipFile(zip_file_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
             for root, dirs, files in os.walk(folder_path):
                 for file in files:
                     zipf.write(os.path.join(root, file), os.path.relpath(os.path.join(root, file), folder_path))
 
+        # Delete the folder containing processed images
+        shutil.rmtree(folder_path)
+
         # Open the zip file in binary mode and serve it as a response
         with open(zip_file_path, 'rb') as f:
             response = HttpResponse(f.read(), content_type='application/zip')
             response['Content-Disposition'] = f'attachment; filename="{zip_file_name}"'
-            # Redirect back to the index page after downloading the zip file
-            return response
+        # Delete the zip file after serving it as a response
+        os.remove(zip_file_path)
+        shutil.rmtree(upload_folder)
+        # Redirect back to the index page after downloading the zip file
+        return response
     else:
-        return render(request, "index.html", {"q": question})
+        return render(request, "Submit.html")
+
     
 
-def predictionFun(answers):
-    negative_marking = True
-    questions = 5
-    choices = 5
+def predictionFun(answers, upload_folder, num_questions, options_per_question, negative_marking):
+    negative_marking = negative_marking
+    questions = num_questions
+    choices = options_per_question
 
     # input and output folder paths
-    input_folder_path = './OMR_Sheets'
+    input_folder_path = upload_folder
     output_folder_path = './OMR_Answers'
 
     # Ensure the folder path exists
@@ -93,8 +117,8 @@ def predictionFun(answers):
 
 
 def get_answers(path, answers, negative_marking, questions, choices):
-    widthImg = 700
-    heightImg = 700
+    # determining the height and width of the image
+    heightImg, widthImg = resize_image(questions, choices, 150, 150)
 
     # converting answers to indexes. calling the function from utils file
     answers = convertAnswers(answers)
@@ -117,135 +141,141 @@ def get_answers(path, answers, negative_marking, questions, choices):
         # detecting edges
         imgCanny = cv2.Canny(imgBlur, 10, 50)
 
-        try:
+        # try:
             # then we find out the rectangles in the picture and finding out the corner points.
-            contours, heirarchy = cv2.findContours(imgCanny, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-            cv2.drawContours(imgContours, contours, -1, (0, 255, 0), 10)
+        contours, heirarchy = cv2.findContours(imgCanny, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+        cv2.drawContours(imgContours, contours, -1, (0, 255, 0), 10)
 
-            # finding rectangles. calling the function from the utils file
-            rectangleContours = rectContour(contours)
-            # we are getting every points of the pixels. we want the corner points only
-            biggestContour = getCornerPoints(rectangleContours[0])
-            gradePoints = getCornerPoints(rectangleContours[1])    # second biggest
+        # finding rectangles. calling the function from the utils file
+        rectangleContours = rectContour(contours)
+        # we are getting every points of the pixels. we want the corner points only
+        biggestContour = getCornerPoints(rectangleContours[0])
+        gradePoints = getCornerPoints(rectangleContours[1])    # second biggest
 
-            if biggestContour.size != 0 and gradePoints.size != 0:
-                cv2.drawContours(imgBiggestContours, biggestContour, -1, (0, 255, 0), 20)
-                cv2.drawContours(imgBiggestContours, gradePoints, -1, (0, 0, 255), 20)
+        if biggestContour.size != 0 and gradePoints.size != 0:
+            cv2.drawContours(imgBiggestContours, biggestContour, -1, (0, 255, 0), 20)
+            cv2.drawContours(imgBiggestContours, gradePoints, -1, (0, 0, 255), 20)
 
-                # rearranging the the corner points correctly of both rectangles 
-                # (like finding out top left, top right, bottom left, bottom right corner points)
-                # calling the function from the utils file
-                biggestContour = reorder(biggestContour)
-                gradePoints = reorder(gradePoints)
+            # rearranging the the corner points correctly of both rectangles 
+            # (like finding out top left, top right, bottom left, bottom right corner points)
+            # calling the function from the utils file
+            biggestContour = reorder(biggestContour)
+            gradePoints = reorder(gradePoints)
 
-                # After getting the points extracting the both rectangles (OMR, Grade) from the image.
-                point1 = np.float32(biggestContour)
-                point2 = np.float32([[0, 0], [widthImg, 0], [0, heightImg], [widthImg, heightImg]])
-                matrix = cv2.getPerspectiveTransform(point1, point2)
-                imgWarpColored = cv2.warpPerspective(img, matrix, (widthImg, heightImg))
+            # After getting the points extracting the both rectangles (OMR, Grade) from the image.
+            point1 = np.float32(biggestContour)
+            point2 = np.float32([[0, 0], [widthImg, 0], [0, heightImg], [widthImg, heightImg]])
+            matrix = cv2.getPerspectiveTransform(point1, point2)
+            imgWarpColored = cv2.warpPerspective(img, matrix, (widthImg, heightImg))
 
-                gradePoint1 = np.float32(gradePoints)
-                gradePoint2 = np.float32([[0, 0], [325, 0], [0, 150], [325, 150]])
-                gradeMatrix = cv2.getPerspectiveTransform(gradePoint1, gradePoint2)
-                imgGradeWarpColored = cv2.warpPerspective(img, gradeMatrix, (325, 150))
+            gradePoint1 = np.float32(gradePoints)
+            gradePoint2 = np.float32([[0, 0], [325, 0], [0, 150], [325, 150]])
+            gradeMatrix = cv2.getPerspectiveTransform(gradePoint1, gradePoint2)
+            imgGradeWarpColored = cv2.warpPerspective(img, gradeMatrix, (325, 150))
 
-                # After extracting the OMR rectangle converting that extracted image into binary image 
-                # (only black and white pixels will be there. 0 and 255 only)
+            # After extracting the OMR rectangle converting that extracted image into binary image 
+            # (only black and white pixels will be there. 0 and 255 only)
 
-                # applying the binary threshold
-                imgWarpGray = cv2.cvtColor(imgWarpColored, cv2.COLOR_BGR2GRAY)
-                imgThresh = cv2.threshold(imgWarpGray, 170, 255, cv2.THRESH_BINARY_INV)[1]
+            # applying the binary threshold
+            imgWarpGray = cv2.cvtColor(imgWarpColored, cv2.COLOR_BGR2GRAY)
+            imgThresh = cv2.threshold(imgWarpGray, 170, 255, cv2.THRESH_BINARY_INV)[1]
 
-                # Then we split the image into 5 for each row to get each bubbles.
-                # caling the function from utils file
-                boxes = splitBoxes(imgThresh, questions, choices)
-                
-                pixelVal = np.zeros((questions, choices))
-                columnCount = 0
-                rowCount = 0
-
-                # for a row which bubble have the most number of 255s in it, that will be the answer marked in the image. 
-                # like that we find every answers that marked in the image.
-
-                # box with most non zero values will be the answer of that row
-                # finding index values of the correct answers
-                for box in boxes:
-                    pixelVal[rowCount][columnCount] = cv2.countNonZero(box)
-                    columnCount += 1
-                    if columnCount == choices:
-                        columnCount = 0
-                        rowCount += 1
-
-                myIndex = []
-                for i in range(0, questions):
-                    arr = pixelVal[i]
-                    count_greater_than_5 = sum(1 for value in arr if value > 5000)
-                    # Check if the count is greater than 1
-                    if count_greater_than_5 > 1 or count_greater_than_5 < 1:
-                        myIndex.append(-1)
-                    else:
-                        myIndexVal = np.where(arr==np.amax(arr))
-                        myIndex.append(myIndexVal[0][0])
-                
-                # also calculating the grade by comparing it with the answers that we have predefined.
-                # Grading
-                grading = []
-                for i in range(0, questions):
-                    if answers[i] == myIndex[i]:
-                        grading.append(1)
-                    else:
-                        grading.append(0)
-                
-                temp_grading = grading.copy()
-
-                if negative_marking:
-                    for i in range(len(myIndex)):
-                        if myIndex[i] != -1 and temp_grading[i] == 0:
-                            temp_grading[i] -= 1/3
-
-                score = (sum(temp_grading)/questions) * 100
-                score = round(score, 1)
-                score = max(score, 0.0)
-                if score == 100.0:
-                    score = 100
-
-                # now we have to mark the right and wrong in the OMR sheet that we extracted from the image.
-                # for that also we use cv2 to draw green if the answer is correct, red if the answer marked is wrong. 
-                # if its wrong marking the correct answer with a small green dot.
-                # displaying the answers in the image
-                imgResult = imgWarpColored.copy()
-                # calling the function from utils file
-                imgResult = showAnswers(imgResult, myIndex, grading, answers, questions, choices)
-
-                # now we need to make these markings inside the original image. so taking the markings
-                imgRawDrawing = np.zeros_like(imgWarpColored)
-                imgRawDrawing = showAnswers(imgRawDrawing, myIndex, grading, answers, questions, choices)
-
-                # after that we took the drawings(markings) only. we need to show that in the real image. 
-                # the real image may not be in correct shape. it may be little tilted. 
-                # so we make inverse that drawings to be correctly fit in the real image.
-                invMatrix = cv2.getPerspectiveTransform(point2, point1)
-                imgInvWrap = cv2.warpPerspective(imgRawDrawing, invMatrix, (widthImg, heightImg))
-
-                # after inversing the drawings we add that to the real image and we can get the markings will be correctly aligned to each bubbles.
-                # making the final image
-                finalImg = cv2.addWeighted(finalImg, 0.8, imgInvWrap, 1, 0)
-
-                # also we found out the grade before. and we add that grade into the small rectangle.
-                # adding the Grade in the box
-                imgRawGrade = np.zeros_like(imgGradeWarpColored)
-                cv2.putText(imgRawGrade, str(score) + '%', (20, 100), cv2.FONT_HERSHEY_COMPLEX, 3, (0, 256, 256), 3)
-
-                gradeInvMatrix = cv2.getPerspectiveTransform(gradePoint2, gradePoint1)
-                imgInvGradeWarp = cv2.warpPerspective(imgRawGrade, gradeInvMatrix, (widthImg, heightImg))
-
-                # The final Image
-                finalImg = cv2.addWeighted(finalImg, 1, imgInvGradeWarp, 1, 0)
-
-                return finalImg, score
+            # Then we split the image into 5 for each row to get each bubbles.
+            # caling the function from utils file
+            boxes = splitBoxes(imgThresh, questions, choices)
             
-        except:
-            print('An Error Occured')
+            pixelVal = np.zeros((questions, choices))
+            columnCount = 0
+            rowCount = 0
+
+            # for a row which bubble have the most number of 255s in it, that will be the answer marked in the image. 
+            # like that we find every answers that marked in the image.
+
+            # box with most non zero values will be the answer of that row
+            # finding index values of the correct answers
+            for box in boxes:
+                pixelVal[rowCount][columnCount] = cv2.countNonZero(box)
+                columnCount += 1
+                if columnCount == choices:
+                    columnCount = 0
+                    rowCount += 1
+
+            myIndex = []
+            for i in range(0, questions):
+                arr = pixelVal[i]
+                count_greater_than_5 = sum(1 for value in arr if value > 5000)
+                # Check if the count is greater than 1
+                if count_greater_than_5 > 1 or count_greater_than_5 < 1:
+                    myIndex.append(-1)
+                else:
+                    myIndexVal = np.where(arr==np.amax(arr))
+                    myIndex.append(myIndexVal[0][0])
+            
+            # also calculating the grade by comparing it with the answers that we have predefined.
+            # Grading
+            grading = []
+            for i in range(0, questions):
+                if answers[i] == myIndex[i]:
+                    grading.append(1)
+                else:
+                    grading.append(0)
+            
+            temp_grading = grading.copy()
+
+            if negative_marking:
+                for i in range(len(myIndex)):
+                    if myIndex[i] != -1 and temp_grading[i] == 0:
+                        temp_grading[i] -= 1/3
+
+            score = (sum(temp_grading)/questions) * 100
+            score = round(score, 1)
+            score = max(score, 0.0)
+            if score == 100.0:
+                score = 100
+
+            # now we have to mark the right and wrong in the OMR sheet that we extracted from the image.
+            # for that also we use cv2 to draw green if the answer is correct, red if the answer marked is wrong. 
+            # if its wrong marking the correct answer with a small green dot.
+            # displaying the answers in the image
+            imgResult = imgWarpColored.copy()
+            # calling the function from utils file
+            imgResult = showAnswers(imgResult, myIndex, grading, answers, questions, choices)
+
+            # now we need to make these markings inside the original image. so taking the markings
+            imgRawDrawing = np.zeros_like(imgWarpColored)
+            imgRawDrawing = showAnswers(imgRawDrawing, myIndex, grading, answers, questions, choices)
+
+            # after that we took the drawings(markings) only. we need to show that in the real image. 
+            # the real image may not be in correct shape. it may be little tilted. 
+            # so we make inverse that drawings to be correctly fit in the real image.
+            invMatrix = cv2.getPerspectiveTransform(point2, point1)
+            imgInvWrap = cv2.warpPerspective(imgRawDrawing, invMatrix, (widthImg, heightImg))
+
+            # after inversing the drawings we add that to the real image and we can get the markings will be correctly aligned to each bubbles.
+            # making the final image
+            finalImg = cv2.addWeighted(finalImg, 0.8, imgInvWrap, 1, 0)
+
+            # also we found out the grade before. and we add that grade into the small rectangle.
+            # adding the Grade in the box
+            imgRawGrade = np.zeros_like(imgGradeWarpColored)
+            cv2.putText(imgRawGrade, str(score) + '%', (20, 100), cv2.FONT_HERSHEY_COMPLEX, 3, (0, 256, 256), 3)
+
+            gradeInvMatrix = cv2.getPerspectiveTransform(gradePoint2, gradePoint1)
+            imgInvGradeWarp = cv2.warpPerspective(imgRawGrade, gradeInvMatrix, (widthImg, heightImg))
+
+            # The final Image
+            finalImg = cv2.addWeighted(finalImg, 1, imgInvGradeWarp, 1, 0)
+
+            return finalImg, score
+            
+        # except:
+        #     print('An Error Occured')
+
+# function to return the width andheight of the image according to the questions and answers got
+def resize_image(num_questions, num_choices_per_question, question_height, choice_width):
+    img_height = num_questions * question_height
+    img_width = num_choices_per_question * choice_width
+    return img_height, img_width
 
 # function to find out the rectangle edges
 def rectContour(contours):
@@ -296,7 +326,7 @@ def splitBoxes(img, questions, choices):
 
 # function for marking the bubbles in the OMR sheet
 def showAnswers(img, myIndex, grading, answers, questions, choices):
-    sectionWidth = int(img.shape[1]/questions)
+    sectionWidth = int(img.shape[0]/questions)
     sectionHeight = int(img.shape[1]/choices)
 
     for i in range(0, questions):
@@ -308,7 +338,7 @@ def showAnswers(img, myIndex, grading, answers, questions, choices):
         if grading[i]:
             cv2.circle(img, (cX, cY), 50, (0, 255, 0), cv2.FILLED)
         elif grading[i] == 0 and myAns == -1: # checking wheather the bubble is marked nothing or more than one 
-            lineX = (sectionWidth * questions)
+            lineX = (sectionWidth * choices)
             img = cv2.line(img, (50, cY), (lineX - 50, cY), (0, 0, 255), 70)
 
             cX = (answers[i] * sectionWidth) + sectionWidth // 2
